@@ -11,5 +11,8 @@ export default defineConfig({
       util: 'util'
     }
   },
+  define: {
+    'process.env.YTDL_NO_UPDATE': true
+  },
   plugins: [react()],
 })
