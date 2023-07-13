@@ -2,6 +2,7 @@ setup-env:
 	npm i vite
 	npm create vite@latest twelve-labs-search -- --template react
 	cd twelve-labs-search; npm install
+destroy-env:
 	rm package.json
 	rm package-lock.json
 	rm -r node_modules
