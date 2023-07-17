@@ -5,14 +5,15 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   resolve: {
     alias: {
-      process: "process/browser",
-      stream: "stream-browserify",
-      zlib: "browserify-zlib",
-      util: 'util'
+      process: 'process/browser',
+      stream: 'stream-browserify',
+      zlib: 'browserify-zlib',
+      util: 'util',
+      timers: 'timers-browserify'
     }
   },
   define: {
-    'process.env.YTDL_NO_UPDATE': true
+    process: { env: {CODESPACE_NAME: `${process.env['CODESPACE_NAME']}`}}
   },
   plugins: [react()],
 })
