@@ -10,49 +10,65 @@ import Typography from '@mui/material/Typography';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import VideoSettingsIcon from '@mui/icons-material/VideoSettings';
+import TextField from '@mui/material/TextField';
 
 
-const VIDEO_INFO_URL = `https://${process.env['CODESPACE_NAME']}-4000.preview.app.github.dev/video-info?URL=`
+const JSON_VIDEO_INFO_URL = `https://${process.env['CODESPACE_NAME']}-4000.preview.app.github.dev/json-video-info?URL=`
+const CHANNEL_VIDEO_INFO_URL = `https://${process.env['CODESPACE_NAME']}-4000.preview.app.github.dev/channel-video-info?CHANNEL_ID=`
 const DOWNLOAD_URL = `https://${process.env['CODESPACE_NAME']}-4000.preview.app.github.dev/download`
 
 function UploadYoutubeVideo ({indexedVideos, setIndexedVideos}) {
     const [selectedJSON, setSelectedJSON] = useState()
-    const [jsonVideos, setJsonVideos] = useState()
-
-    useEffect(() => {
-        if (jsonVideos) {
-            const responses = jsonVideos.map(getYouTubeInfo)
-            Promise.all(responses).then( videoData => { 
-                setIndexedVideos(videoData)
-            })
-        }
-    }, [jsonVideos])
+    const [youtubeChannelId, setYoutubeChannelId] = useState()
 
     const handleJSONSelect = (event) => {
         setSelectedJSON(event.target.files[0])
     }
 
-    const handleJSONSubmit = (event) => {
-        let fileReader = new FileReader()
-        fileReader.readAsText(selectedJSON)
-        fileReader.onloadend = () => {
-            setJsonVideos(JSON.parse(fileReader.result))
+    const handleYoutubeUrlEntry = (event) => {
+        setYoutubeChannelId(event.target.value)
+        console.log(event.target.value)
+    }
+
+    const handleSubmit = () => {
+        if (selectedJSON) {
+            let fileReader = new FileReader()
+            fileReader.readAsText(selectedJSON)
+            fileReader.onloadend = () => {
+                const jsonVideos = JSON.parse(fileReader.result)
+                
+                const responses = jsonVideos.map(getJsonVideoInfo)
+                Promise.all(responses).then( videoData => { 
+                    setIndexedVideos(videoData)
+                })
+            }
+        } else {
+            const response = getChannelVideoInfo(youtubeChannelId)
+            response.then(videoData => {
+                setIndexedVideos(videoData)
+            })
         }
     }
 
-    const getYouTubeInfo = async (videoData) => {
-        const response = await fetch(`${VIDEO_INFO_URL}${videoData.url}`)
+    const getJsonVideoInfo = async (videoData) => {
+        const response = await fetch(`${JSON_VIDEO_INFO_URL}${videoData.url}`)
+        return await response.json()
+    }
+
+    const getChannelVideoInfo = async () => {
+        const response = await fetch(`${CHANNEL_VIDEO_INFO_URL}${youtubeChannelId}`)
         return await response.json()
     }
 
     const indexYouTubeVideos = async () => {
+        const videoData = indexedVideos.map(videoData => { return {url: videoData.video_url, title: videoData.title }})
         const data = {
             method: 'POST',
             headers: {
                 'Accept': 'application/json',
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify(jsonVideos)
+            body: JSON.stringify(videoData)
         }
         console.log(data)
         const response = await fetch(DOWNLOAD_URL, data)
@@ -100,32 +116,35 @@ function UploadYoutubeVideo ({indexedVideos, setIndexedVideos}) {
     } else {
         controls =
             <>
-                <Grid display='flex' justifyContent='center' alignItems='center' container direction='column'>
-                    <Grid direction='row' container>
-                        <Grid>
-                            <Button component='label' onChange={ handleJSONSelect }>
-                                Select JSON URL File
-                                <input
-                                    type='file'
-                                    accept='.json'
-                                    hidden
-                                />
-                            </Button>
-                        </Grid>
+                <Grid display='flex' justifyContent='center' alignItems='center' container direction='column' xs>
+                    <Grid display='flex' xs>
+                        <Button component='label' onChange={ handleJSONSelect } disabled={ !!youtubeChannelId }>
+                            Select JSON URL File
+                            <input
+                                type='file'
+                                accept='.json'
+                                hidden
+                            />
+                        </Button>
+                    </Grid>
 
-                        <Grid>
-                            <Button disabled={ !selectedJSON ? true : false} onClick={ handleJSONSubmit }>
-                                Submit
-                            </Button>
-                        </Grid>
+                    <Grid sx={{mb: 3}} display='flex' xs={3}>
+                        <TextField label="Channel URL" variant="standard" fullWidth onChange={ handleYoutubeUrlEntry } disabled={ !!selectedJSON }/>
                     </Grid>
                 
-                    <Grid display='flex' justifyContent='center' alignItems='center'>
-                        <DescriptionIcon color='primary'></DescriptionIcon>
+                    <Grid display='flex' justifyContent='center' alignItems='center' xs>
+                        <DescriptionIcon color='primary'/>
                         <strong>Selected File:</strong>
                     </Grid>
-                    <Grid display='flex' justifyContent='center' alignItems='center'>
+
+                    <Grid display='flex' justifyContent='center' alignItems='center' xs>
                         { selectedJSON ? selectedJSON.name : 'None' }
+                    </Grid>
+
+                    <Grid display='flex' xs>
+                        <Button disabled={ (!selectedJSON && !youtubeChannelId) ? true : false} onClick={ handleSubmit }>
+                            Submit
+                        </Button>
                     </Grid>
                 </Grid>
             </>
