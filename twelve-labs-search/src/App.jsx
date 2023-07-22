@@ -24,7 +24,7 @@ function App() {
   return (
     <>
       <ThemeProvider theme={theme}>
-        <Grid display='flex' justifyContent='center' alignItems='center' minHeight='95vh' container>
+        <Grid justifyContent='center' alignItems='center' minHeight='95vh' container>
           <UploadYoutubeVideo indexedVideos={ indexedVideos } setIndexedVideos={ setIndexedVideos }/>
         </Grid>
         <CssBaseline />
