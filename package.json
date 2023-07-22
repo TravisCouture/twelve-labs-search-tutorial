@@ -1,11 +1,15 @@
 {
   "dependencies": {
+    "@gonetone/get-youtube-id-by-url": "^1.0.0",
+    "axios": "^1.4.0",
     "body-parser": "^1.20.2",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
+    "node-fetch": "^2.6.12",
     "nodemon": "^3.0.1",
     "vite": "^4.4.2",
-    "ytdl-core": "^4.11.4"
+    "yt-channel-info": "^3.2.1",
+    "ytdl-core": "^4.11.5"
   }
 }
