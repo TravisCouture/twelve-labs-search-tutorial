@@ -10,6 +10,8 @@ import Typography from '@mui/material/Typography';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import VideoSettingsIcon from '@mui/icons-material/VideoSettings';
+import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import CircularProgress from '@mui/material/CircularProgress';
 import TextField from '@mui/material/TextField';
 
 
@@ -18,6 +20,7 @@ const CHANNEL_VIDEO_INFO_URL = `https://${process.env['CODESPACE_NAME']}-4000.pr
 const DOWNLOAD_URL = `https://${process.env['CODESPACE_NAME']}-4000.preview.app.github.dev/download`
 
 function UploadYoutubeVideo ({indexedVideos, setIndexedVideos}) {
+    const [pendingApiRequest, setPendingApiRequest] = useState(false)
     const [selectedJSON, setSelectedJSON] = useState()
     const [youtubeChannelId, setYoutubeChannelId] = useState()
 
@@ -25,12 +28,18 @@ function UploadYoutubeVideo ({indexedVideos, setIndexedVideos}) {
         setSelectedJSON(event.target.files[0])
     }
 
+    const handleReset = () => {
+        setIndexedVideos(null)
+        setSelectedJSON(null)
+        setYoutubeChannelId(null)
+    }
+
     const handleYoutubeUrlEntry = (event) => {
         setYoutubeChannelId(event.target.value)
-        console.log(event.target.value)
     }
 
     const handleSubmit = () => {
+        setPendingApiRequest(true)
         if (selectedJSON) {
             let fileReader = new FileReader()
             fileReader.readAsText(selectedJSON)
@@ -39,12 +48,14 @@ function UploadYoutubeVideo ({indexedVideos, setIndexedVideos}) {
                 
                 const responses = jsonVideos.map(getJsonVideoInfo)
                 Promise.all(responses).then( videoData => { 
+                    setPendingApiRequest(false)
                     setIndexedVideos(videoData)
                 })
             }
         } else {
             const response = getChannelVideoInfo(youtubeChannelId)
             response.then(videoData => {
+                setPendingApiRequest(false)
                 setIndexedVideos(videoData)
             })
         }
@@ -73,6 +84,15 @@ function UploadYoutubeVideo ({indexedVideos, setIndexedVideos}) {
         console.log(data)
         const response = await fetch(DOWNLOAD_URL, data)
         await response.json().then( json => { console.log(json)})
+    }
+
+    let apiRequestElement
+
+    if (pendingApiRequest) {
+        apiRequestElement = 
+            <Grid>
+                <CircularProgress/>
+            </Grid>
     }
 
     let controls
@@ -106,11 +126,20 @@ function UploadYoutubeVideo ({indexedVideos, setIndexedVideos}) {
                 <Grid display='flex' justifyContent='center' alignItems='center' container spacing={ 5 } padding={ 5 }>
                     { videos }
                 </Grid>
-                <Grid display='flex' justifyContent='center' alignItems='center'>
-                    <Button component='label' onClick={ indexYouTubeVideos }>
-                        <VideoSettingsIcon color='primary' sx={{ mr: 1 }}></VideoSettingsIcon>
-                        Index Videos
-                    </Button>
+                <Grid display='flex' justifyContent='center' alignItems='center' sx={{ mb: 3}}>
+                    <Grid display='flex'>
+                        <Button component='label' onClick={ indexYouTubeVideos }>
+                            <VideoSettingsIcon color='primary' sx={{ mr: 1 }}></VideoSettingsIcon>
+                            Index Videos
+                        </Button>
+                    </Grid>
+
+                    <Grid display='flex'>
+                        <Button component='label' onClick={ handleReset }>
+                            <RestartAltIcon color='primary' sx={{ mr: 1 }}/>
+                            Reset
+                        </Button>
+                    </Grid>
                 </Grid>
             </>
     } else {
@@ -142,10 +171,12 @@ function UploadYoutubeVideo ({indexedVideos, setIndexedVideos}) {
                     </Grid>
 
                     <Grid display='flex' xs>
-                        <Button disabled={ (!selectedJSON && !youtubeChannelId) ? true : false} onClick={ handleSubmit }>
+                        <Button disabled={ (!selectedJSON && !youtubeChannelId && !pendingApiRequest) ? true : false} onClick={ handleSubmit }>
                             Submit
                         </Button>
                     </Grid>
+
+                    { apiRequestElement }
                 </Grid>
             </>
     }
