@@ -7,6 +7,7 @@ const bodyParser = require('body-parser');
 const app = express()
 const axios = require('axios').default
 const ytch = require('yt-channel-info')
+const sanitize = require('sanitize-filename')
 
 const CORS_OPTS = {
     origin: '*',
@@ -103,7 +104,7 @@ app.post('/download', bodyParser.urlencoded(), async (request, response) => {
     let jsonVideos = request.body
     const videoDownloads = jsonVideos.map( async (videoData) => {
         return new Promise((resolve, reject) => { 
-            const safeName = videoData.title.toLowerCase().replace('/', '').replace(' ', '_')
+            const safeName = sanitize(videoData.title)
             const stream = ytdl(videoData.url, {format: '.mp4'}).pipe(fs.createWriteStream(`videos/${safeName}.mp4`))
             stream.on('finish', resolve)
             stream.on('finish', () => { 
