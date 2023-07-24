@@ -100,7 +100,7 @@ function UploadYoutubeVideo ({indexedVideos, setIndexedVideos}) {
 
     if (indexedVideos) {
         videos = indexedVideos.map(video =>
-            <Grid key={ video.videoId } xs={ 4 }>
+            <Grid key={ video.videoId } xs={ 3 }>
                 <Card>
                     <CardMedia
                         sx={{ height: '20vh' }}
@@ -123,22 +123,25 @@ function UploadYoutubeVideo ({indexedVideos, setIndexedVideos}) {
 
         controls = 
             <>
-                <Grid display='flex' justifyContent='center' alignItems='center' container spacing={ 5 } padding={ 5 }>
-                    { videos }
-                </Grid>
-                <Grid display='flex' justifyContent='center' alignItems='center' sx={{ mb: 3}}>
-                    <Grid display='flex'>
-                        <Button component='label' onClick={ indexYouTubeVideos }>
-                            <VideoSettingsIcon color='primary' sx={{ mr: 1 }}></VideoSettingsIcon>
-                            Index Videos
-                        </Button>
+                <Grid display='flex' justifyContent='center' alignItems='center' direction='column' container>
+                    <Grid direction='row' container sx={{p: 1, width: '100%', bgcolor: '#121212'}} position='fixed' top='0' justifyContent='center' alignItems='center'>
+                        <Grid>
+                            <Button component='label' onClick={ indexYouTubeVideos }>
+                                <VideoSettingsIcon color='primary' sx={{ mr: 1 }}></VideoSettingsIcon>
+                                Index Videos
+                            </Button>
+                        </Grid>
+
+                        <Grid>
+                            <Button component='label' onClick={ handleReset }>
+                                <RestartAltIcon color='primary' sx={{ mr: 1 }}/>
+                                Reset
+                            </Button>
+                        </Grid>
                     </Grid>
 
-                    <Grid display='flex'>
-                        <Button component='label' onClick={ handleReset }>
-                            <RestartAltIcon color='primary' sx={{ mr: 1 }}/>
-                            Reset
-                        </Button>
+                    <Grid direction='row' container spacing={ 5 } sx={{mx: 5, my: 2, pt: 5}} disableEqualOverflow>
+                        { videos }
                     </Grid>
                 </Grid>
             </>
