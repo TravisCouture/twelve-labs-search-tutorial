@@ -1,13 +1,15 @@
-require('dotenv').config();
+require('dotenv').config()
 const express = require('express')
 const cors = require('cors')
 const ytdl = require('ytdl-core')
-const fs = require('fs');
-const bodyParser = require('body-parser');
+const fs = require('fs')
+const bodyParser = require('body-parser')
 const app = express()
 const axios = require('axios').default
 const ytch = require('yt-channel-info')
 const sanitize = require('sanitize-filename')
+const util = require('util')
+const streamPipeline = util.promisify(require('stream').pipeline)
 
 const CORS_OPTS = {
     origin: '*',
@@ -30,14 +32,28 @@ const TWELVE_LABS_API = axios.create({
 })
 
 app.use(cors(CORS_OPTS))
-app.use(bodyParser.json());
+app.use(bodyParser.json())
 app.use(
   bodyParser.urlencoded({
     extended: true,
   }),
-);
+)
 
-const createIndex = async () => {
+const errorLogger = (error, request, response, next) => {
+    console.error(error.stack)
+    next(error)
+}
+
+const errorHandler = (error, request, response, next) => {
+    return response.status(error.status || 500).json(error || 'Something Went Wrong...')
+}
+
+app.use(
+    errorLogger,
+    errorHandler
+)
+
+const createIndex = async (indexName) => {
         const headers = {
             headers: {
                 'accept': 'application/json',
@@ -50,11 +66,11 @@ const createIndex = async () => {
             'engine_id': 'marengo2.5',
             'index_options': ['visual', 'conversation', 'text_in_video', 'logo'],
             'addons': ['thumbnail'],
-            'index_name': 'tl-search-example'
+            'index_name': indexName
         })
 
     const response = await TWELVE_LABS_API.post('/indexes', params, headers)
-    return await response.data
+    return await response.data._id
 }
 
 const indexVideo = async (videoPath, indexId) => {
@@ -76,59 +92,139 @@ const indexVideo = async (videoPath, indexId) => {
     return await response.data
 }
 
+process.on('uncaughtException', function (exception) {
+    console.log(exception)
+})
+
 app.listen(4000, () => {
     console.log('Server Running. Listening on port 4000')
-});
-
-app.get('/json-video-info', async (request, response) => {
-    let url = request.query.URL
-    const videoId = ytdl.getURLVideoID(url)
-    const videoInfo = await ytdl.getBasicInfo(videoId)
-    response.json(videoInfo.videoDetails)
 })
 
-app.get('/channel-video-info', async (request, response) => {
-    const channelVideos = await ytch.getChannelVideos({
-        channelId: request.query.CHANNEL_ID
-    })
+app.get('/get-index-info', async (request, response, next) => {
+    try {
+        let indexId = request.query.INDEX_ID
+        const headers = {
+            headers: {
+                'accept': 'application/json',
+                'Content-Type': 'application/json',
+                'x-api-key': TWELVE_LABS_API_KEY
+            }
+        }
+        const videos = await TWELVE_LABS_API.get(`/indexes/${indexId}/videos?&page_limit=50`, headers)
+        const mergedVideos = await Promise.all(videos.data.data.map( async (video) => {
+            const videoInfo = await TWELVE_LABS_API.get(`/indexes/${indexId}/videos/${video._id}`, headers)
+            const videoData = await videoInfo.data
+            return {...video, ...videoData}
+        }))
+        response.json(mergedVideos)
+    } catch (error) {
+        return next(error)
+    }
+})
 
-    const channelVideosInfo = channelVideos.items.map( async (videoInfo) => { return await ytdl.getBasicInfo(videoInfo.videoId) })
-    Promise.all(channelVideosInfo).then( async (videosData) => {
+app.get('/json-video-info', async (request, response, next) => {
+    try {
+        let url = request.query.URL
+        const videoId = ytdl.getURLVideoID(url)
+        const videoInfo = await ytdl.getBasicInfo(videoId)
+        response.json(videoInfo.videoDetails)
+    } catch (error) {
+        return next(error)
+    }
+})
+
+app.get('/channel-video-info', async (request, response, next) => {
+    try {
+        const channelVideos = await ytch.getChannelVideos({
+            channelId: request.query.CHANNEL_ID
+        })
+
+        const channelVideosInfo = channelVideos.items.map( async (videoInfo) => { return await ytdl.getBasicInfo(videoInfo.videoId) })
+        const videosData = await Promise.all(channelVideosInfo).catch(next)
         const videosDetails = videosData.map( video => { return video.videoDetails })
         response.json(videosDetails)
-    })
+    } catch (error) {
+        return next(error)
+    }
 })
 
-app.post('/download', bodyParser.urlencoded(), async (request, response) => {
-    let downloadedVideos = []
-    let jsonVideos = request.body
-    const videoDownloads = jsonVideos.map( async (videoData) => {
-        return new Promise((resolve, reject) => { 
-            const safeName = sanitize(videoData.title)
-            const stream = ytdl(videoData.url, {format: '.mp4'}).pipe(fs.createWriteStream(`videos/${safeName}.mp4`))
-            stream.on('finish', resolve)
-            stream.on('finish', () => { 
-                console.log(`videos/${videoData.title}.mp4 -- finished`) 
-                downloadedVideos.push(`videos/${safeName}.mp4`) 
-            })
-        })
-    })
-    console.log('Downloading Videos...')
-    const downloadStep = Promise.all(videoDownloads)
-    const indexCreateResponse = await downloadStep.then(
-        createIndex
-    )
-    const indexId = indexCreateResponse._id
-    console.log(`Index Created With ID: ${indexId}`)
-    console.log('Indexing Videos...')
-    const videoIndexingResponses = downloadedVideos.map( async (video) => {
-        console.log(`Submitting ${video} For Indexing...`)
-        return await indexVideo(video, indexId)
-    })
-    console.log('Indexing Submitted...')
-    const indexStep = Promise.all(videoIndexingResponses)
-    indexStep.then( taskIds => {
-        console.log(taskIds)
-        response.json(taskIds)
-    })
+app.post('/download', bodyParser.urlencoded(), async (request, response, next) => {
+    try {
+        const jsonVideos = request.body.videoData
+        const indexName = request.body.indexName
+        const totalVideos = jsonVideos.length
+        let processedVideosCount = 0
+        const chunk_size = 5
+        let videoIndexingResponses = []
+
+        console.log('Creating Index...')
+        const indexId = await createIndex(indexName)
+        console.log(`Index Created With ID: ${indexId}`)
+
+        console.log('Downloading Videos...')
+
+        for (let i = 0; i < totalVideos; i += chunk_size) {
+            const videoChunk = jsonVideos.slice(i, i + chunk_size)
+            const chunkDownloadedVideos = []
+
+            await Promise.all(videoChunk.map(async (videoData) => {
+                try {
+                    const safeName = sanitize(videoData.title)
+                    const videoPath = `videos/${safeName}.mp4`
+                    const stream = ytdl(videoData.url, { filter: 'videoandaudio', format: '.mp4' })
+                    await streamPipeline(stream, fs.createWriteStream(videoPath))
+
+                    console.log(`${videoPath} -- finished downloading`)
+                    chunkDownloadedVideos.push(videoPath)
+                } catch (error) {
+                    console.log(`Error downloading ${videoData.title}`);
+                    console.error(error);
+                }
+            })).catch(next)
+
+            console.log(`Submitting Videos For Indexing | Chunk ${Math.floor(i / chunk_size) + 1}`)
+
+            const chunkVideoIndexingResponses = await Promise.all(chunkDownloadedVideos.map(async (video) => {
+                console.log(`Submitting ${video} For Indexing...`)
+                return await indexVideo(video, indexId)
+            })).catch(next)
+
+            console.log('Indexing Submission Completed for Chunk | Task IDs:')
+            console.log(chunkVideoIndexingResponses)
+
+            processedVideosCount += videoChunk.length
+
+            console.log(`Processed ${processedVideosCount} out of ${totalVideos} videos`)
+
+            videoIndexingResponses = videoIndexingResponses.concat(chunkVideoIndexingResponses)
+
+            await new Promise((resolve) => setTimeout(resolve, 1000))
+        }
+
+        console.log('Indexing Submission For All Videos Completed With Task IDs:')
+        console.log(videoIndexingResponses)
+
+        response.json(videoIndexingResponses)
+    } catch (error) {
+        next(error)
+    }
+})
+
+app.get('/check-tasks', async (request, response, next) => {
+    try {
+        const taskId = request.query.TASK_ID
+        const headers = {
+            headers: {
+                'accept': 'application/json',
+                'Content-Type': 'application/json',
+                'x-api-key': TWELVE_LABS_API_KEY
+            }
+        }
+
+        const taskStatus = await TWELVE_LABS_API.get(`/tasks/${taskId}`, headers)
+        console.log(taskStatus.data)
+        response.json(taskStatus.data)
+    } catch (error) {
+        return next(error)
+    }
 })
