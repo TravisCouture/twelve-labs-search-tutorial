@@ -25,12 +25,14 @@ import CenterFocusStrongIcon from '@mui/icons-material/CenterFocusStrong';
 import CenterFocusStrongOutlinedIcon from '@mui/icons-material/CenterFocusStrongOutlined';
 import ReactPlayer from 'react-player'
 
-
-const INDEX_ID_INFO_URL = `https://${process.env['CODESPACE_NAME']}-4000.preview.app.github.dev/get-index-info?INDEX_ID=`
-const JSON_VIDEO_INFO_URL = `https://${process.env['CODESPACE_NAME']}-4000.preview.app.github.dev/json-video-info?URL=`
-const CHANNEL_VIDEO_INFO_URL = `https://${process.env['CODESPACE_NAME']}-4000.preview.app.github.dev/channel-video-info?CHANNEL_ID=`
-const DOWNLOAD_URL = `https://${process.env['CODESPACE_NAME']}-4000.preview.app.github.dev/download`
-const CHECK_TASKS_URL = `https://${process.env['CODESPACE_NAME']}-4000.preview.app.github.dev/check-tasks?TASK_ID=`
+const SERVER_BASE_URL = process.env.CODESPACE_NAME !== 'undefined' ? new URL (`https://${process.env['CODESPACE_NAME']}-4000.preview.app.github.dev`) :
+    new URL('http://localhost:4000')
+const INDEX_ID_INFO_URL = new URL('/get-index-info', SERVER_BASE_URL)
+const JSON_VIDEO_INFO_URL = new URL('/json-video-info', SERVER_BASE_URL)
+const CHANNEL_VIDEO_INFO_URL = new URL('/channel-video-info', SERVER_BASE_URL)
+const DOWNLOAD_URL = new URL('/download', SERVER_BASE_URL)
+const CHECK_TASKS_URL = new URL('/check-tasks', SERVER_BASE_URL)
+const UPDATE_VIDEO_URL = new URL('/update-video', SERVER_BASE_URL)
 
 function UploadYoutubeVideo ({indexedVideos, setIndexedVideos}) {
     const [taskVideos, setTaskVideos] = useState(null)
@@ -48,6 +50,7 @@ function UploadYoutubeVideo ({indexedVideos, setIndexedVideos}) {
     }
 
     const handleReset = () => {
+        setIndexId(null)
         setIndexedVideos(null)
         setTaskVideos(null)
         setSelectedJSON(null)
@@ -96,7 +99,7 @@ function UploadYoutubeVideo ({indexedVideos, setIndexedVideos}) {
         } else if (youtubeChannelId) {
             const response = await getChannelVideoInfo(youtubeChannelId)
             setTaskVideos(response)
-        } else {
+        } else if (indexId) {
             const response = await getIndexInfo()
             setIndexedVideos(response)
         }
@@ -104,17 +107,23 @@ function UploadYoutubeVideo ({indexedVideos, setIndexedVideos}) {
     }
 
     const getJsonVideoInfo = async (videoData) => {
-        const response = await fetch(`${JSON_VIDEO_INFO_URL}${videoData.url}`)
+        const queryUrl = JSON_VIDEO_INFO_URL
+        queryUrl.searchParams.set('URL', videoData.url)
+        const response = await fetch(queryUrl.href)
         return await response.json()
     }
 
     const getChannelVideoInfo = async () => {
-        const response = await fetch(`${CHANNEL_VIDEO_INFO_URL}${youtubeChannelId}`)
+        const queryUrl = CHANNEL_VIDEO_INFO_URL
+        queryUrl.searchParams.set('CHANNEL_ID', youtubeChannelId)
+        const response = await fetch(queryUrl.href)
         return await response.json()
     }
 
     const getIndexInfo = async () => {
-        const response = await fetch(`${INDEX_ID_INFO_URL}${indexId}`)
+        const queryUrl = INDEX_ID_INFO_URL
+        queryUrl.searchParams.set('INDEX_ID', indexId)
+        const response = await fetch(queryUrl.href)
         return await response.json()
     }
 
@@ -133,8 +142,10 @@ function UploadYoutubeVideo ({indexedVideos, setIndexedVideos}) {
             },
             body: JSON.stringify(requestData)
         }
-        const response = await fetch(DOWNLOAD_URL, data)
-        const taskIds = await response.json()
+        const response = await fetch(DOWNLOAD_URL.toString(), data)
+        const json = await response.json()
+        const taskIds = json.taskIds
+        setIndexId(json.indexId)
         await monitorTaskIds(taskIds)
     }
 
@@ -146,7 +157,9 @@ function UploadYoutubeVideo ({indexedVideos, setIndexedVideos}) {
 
         while (poll) {
             const taskStatuses = taskIds.map( async taskId => {
-                const response = await fetch(`${CHECK_TASKS_URL}${taskId._id}`)
+                const queryUrl = CHECK_TASKS_URL
+                queryUrl.searchParams.set('TASK_ID', taskId._id)
+                const response = await fetch(queryUrl.href)
                 return await response.json()
             })
             const statuses = await Promise.all(taskStatuses)
@@ -353,7 +366,7 @@ function UploadYoutubeVideo ({indexedVideos, setIndexedVideos}) {
                     </Grid>
 
                     <Grid sx={{mb: 3}} display='flex' xs={3}>
-                        <TextField label='Channel URL' variant='standard' fullWidth onChange={ handleYoutubeUrlEntry } disabled={ !!selectedJSON || !!indexId }/>
+                        <TextField label='Channel ID' variant='standard' fullWidth onChange={ handleYoutubeUrlEntry } disabled={ !!selectedJSON || !!indexId }/>
                     </Grid>
                 
                     <Grid display='flex' justifyContent='center' alignItems='center' xs>

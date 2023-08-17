@@ -11,19 +11,6 @@ const sanitize = require('sanitize-filename')
 const util = require('util')
 const streamPipeline = util.promisify(require('stream').pipeline)
 
-const CORS_OPTS = {
-    origin: '*',
-
-    methods: [
-        'GET',
-        'POST',
-    ],
-
-    allowedHeaders: [
-        'Content-Type',
-    ],
-}
-
 const TWELVE_LABS_API_KEY = process.env.TWELVE_LABS_API_KEY
 const API_BASE_URL = 'https://api.twelvelabs.io/p/v1.1'
 
@@ -31,7 +18,7 @@ const TWELVE_LABS_API = axios.create({
     baseURL: API_BASE_URL
 })
 
-app.use(cors(CORS_OPTS))
+app.use(cors())
 app.use(bodyParser.json())
 app.use(
   bodyParser.urlencoded({
@@ -102,7 +89,7 @@ app.listen(4000, () => {
 
 app.get('/get-index-info', async (request, response, next) => {
     try {
-        let indexId = request.query.INDEX_ID
+        const indexId = request.query.INDEX_ID
         const headers = {
             headers: {
                 'accept': 'application/json',
@@ -110,6 +97,7 @@ app.get('/get-index-info', async (request, response, next) => {
                 'x-api-key': TWELVE_LABS_API_KEY
             }
         }
+        console.log(indexId)
         const videos = await TWELVE_LABS_API.get(`/indexes/${indexId}/videos?&page_limit=50`, headers)
         const mergedVideos = await Promise.all(videos.data.data.map( async (video) => {
             const videoInfo = await TWELVE_LABS_API.get(`/indexes/${indexId}/videos/${video._id}`, headers)
@@ -204,7 +192,7 @@ app.post('/download', bodyParser.urlencoded(), async (request, response, next) =
         console.log('Indexing Submission For All Videos Completed With Task IDs:')
         console.log(videoIndexingResponses)
 
-        response.json(videoIndexingResponses)
+        response.json({taskIds: videoIndexingResponses, indexId: indexId})
     } catch (error) {
         next(error)
     }
@@ -214,7 +202,7 @@ app.get('/check-tasks', async (request, response, next) => {
     try {
         const taskId = request.query.TASK_ID
         const headers = {
-            headers: {
+            'headers': {
                 'accept': 'application/json',
                 'Content-Type': 'application/json',
                 'x-api-key': TWELVE_LABS_API_KEY
@@ -222,8 +210,17 @@ app.get('/check-tasks', async (request, response, next) => {
         }
 
         const taskStatus = await TWELVE_LABS_API.get(`/tasks/${taskId}`, headers)
-        console.log(taskStatus.data)
         response.json(taskStatus.data)
+    } catch (error) {
+        response.json(error)
+        return next(error)
+    }
+})
+
+app.put('/update-video', async (request, response, next) => {
+    try {
+        const videoId = request.query.VIDEO_ID
+        
     } catch (error) {
         return next(error)
     }

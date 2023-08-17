@@ -9,7 +9,7 @@
     "node-fetch": "^2.6.12",
     "nodemon": "^3.0.1",
     "sanitize-filename": "^1.6.3",
-    "vite": "^4.4.2",
+    "vite": "^4.4.9",
     "yt-channel-info": "^3.2.1",
     "ytdl-core": "^4.11.5"
   }
